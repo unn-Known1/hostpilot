@@ -1,6 +1,7 @@
 {
   "name": "hostpilot",
-  "version": "2.0.0",
+  "version": "2.1.0",
+  "type": "module",
   "description": "A powerful, beautiful cross-platform GUI for managing hosts file with enterprise-grade features",
   "main": "src/main/main.cjs",
   "scripts": {
@@ -16,8 +17,8 @@
   "author": "HostPilot",
   "license": "MIT",
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.0.0",
     "@vitejs/plugin-react": "^4.2.1",
+    "@tailwindcss/postcss": "^4.0.0",
     "autoprefixer": "^10.4.17",
     "concurrently": "^8.2.2",
     "electron": "^28.2.0",
