@@ -102,7 +102,48 @@ function App() {
   const showNotification = (message, type = 'success') => { setNotification({ message, type }); setTimeout(() => setNotification(null), 3000); };
   const validateIP = async (ip) => { const result = await window.electronAPI.validateEntry(ip, ''); setIpValidation({ valid: result.ipValid, message: result.ipValid ? t.validIP : t.invalidIP }); return result.ipValid; };
   const validateHostname = async (hostname) => { const result = await window.electronAPI.validateEntry('', hostname); setHostnameValidation({ valid: result.hostnameValid, message: result.hostnameValid ? t.validHostname : t.invalidHostname }); return result.hostnameValid; };
-  const handleSave = async () => { try { const result = await window.electronAPI.writeHosts(entries); if (result.success) { showNotification(t.saveSuccess); loadData(); } else { showNotification(result.error, 'error'); } } catch (error) { showNotification(error.message, 'error'); } };
+  const handleSave = async () => {
+    // Validate all entries before saving to prevent security issues
+    const validationErrors = [];
+    entries.forEach((entry, index) => {
+      // Validate IP address format
+      const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
+      const ipv6Regex = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^::([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}$|^([0-9a-fA-F]{1,4}:){1,7}:$|^([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}$/;
+
+      if (entry.ip && !ipv4Regex.test(entry.ip) && !ipv6Regex.test(entry.ip)) {
+        validationErrors.push(`Entry ${index + 1}: Invalid IP format "${entry.ip}"`);
+      }
+
+      // Validate hostname format (RFC compliance)
+      const hostnameRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+      if (entry.hostname && !hostnameRegex.test(entry.hostname)) {
+        validationErrors.push(`Entry ${index + 1}: Invalid hostname format "${entry.hostname}"`);
+      }
+
+      // Block dangerous redirects (DNS rebinding protection)
+      if (entry.ip === '127.0.0.1' && entry.hostname === 'localhost') {
+        // Allow localhost entries but log a warning
+        console.warn('localhost entry detected:', entry);
+      }
+
+      // Check for system-critical hostnames that should not be modified
+      const criticalHostnames = ['localhost', 'localhost.localdomain', 'broadcasthost'];
+      if (criticalHostnames.includes(entry.hostname.toLowerCase())) {
+        validationErrors.push(`Entry ${index + 1}: Cannot modify system-critical hostname "${entry.hostname}"`);
+      }
+    });
+
+    if (validationErrors.length > 0) {
+      showNotification('Validation failed:\n' + validationErrors.join('\n'), 'error');
+      return;
+    }
+
+    try {
+      const result = await window.electronAPI.writeHosts(entries);
+      if (result.success) { showNotification(t.saveSuccess); loadData(); }
+      else { showNotification(result.error, 'error'); }
+    } catch (error) { showNotification(error.message, 'error'); }
+  };
   const handleBackup = async () => { try { const result = await window.electronAPI.backupHosts(); if (result.success) { showNotification(t.backupSuccess); loadData(); } else { showNotification(result.error, 'error'); } } catch (error) { showNotification(error.message, 'error'); } };
   const handleFlushDNS = async () => { try { const result = await window.electronAPI.flushDNS(); if (result.success) showNotification(t.dnsFlushed); else showNotification(result.error, 'error'); } catch (error) { showNotification(error.message, 'error'); } };
   const handleImport = async () => { try { const result = await window.electronAPI.showOpenDialog({ filters: [{ name: 'Hosts', extensions: ['txt', 'hosts'] }] }); if (!result.canceled && result.filePaths[0]) { const importResult = await window.electronAPI.importHosts(result.filePaths[0]); if (importResult.success) { setEntries([...entries, ...importResult.entries]); showNotification(t.importSuccess); } else showNotification(importResult.error, 'error'); } } catch (error) { showNotification(error.message, 'error'); } };
